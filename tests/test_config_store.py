@@ -9,6 +9,8 @@ def test_deep_merge_overrides_nested():
     override = {"b": {"c": 99}}
     result = deep_merge(base, override)
     assert result == {"a": 1, "b": {"c": 99, "d": 3}}
+    assert base == {"a": 1, "b": {"c": 2, "d": 3}}
+    assert override == {"b": {"c": 99}}
 
 
 def test_load_missing_file_returns_defaults(tmp_path):
@@ -42,3 +44,12 @@ def test_opacity_get_set(tmp_path):
     store.load()
     store.set_opacity(80)
     assert store.get_opacity() == 80
+
+
+def test_get_widget_returns_isolated_copy(tmp_path):
+    store = ConfigStore(tmp_path / "config.json")
+    store.load()
+    store.set_widget_visible("clock", True)
+    w = store.get_widget("clock")
+    w["visible"] = False
+    assert store.get_widget("clock")["visible"] is True

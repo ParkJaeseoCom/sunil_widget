@@ -48,6 +48,11 @@ class ConfigStore:
         )
 
     def get_widget(self, name: str) -> dict:
+        """위젯 설정 사본을 반환하는 순수 getter.
+
+        알 수 없는 위젯이면 기본값 사본만 반환하고 self.data["widgets"]에
+        슬롯을 생성하지 않는다 (슬롯 생성은 set_widget_* 의 _widget_slot 책임).
+        """
         widget = self.data["widgets"].get(name)
         if widget is None:
             return deepcopy(DEFAULT_WIDGET)
