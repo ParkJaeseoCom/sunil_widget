@@ -1,0 +1,26 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# --- PyInstaller 빌드 산출물 ---
+build/
+dist/
+*.spec
+
+# --- 위젯 런타임 데이터 (개인정보 포함 가능, 버전관리 제외) ---
+teacher-widgets-data/
+*-widgets-data/
+config.local.json
+
+# --- 레퍼런스 (외부 참고용 바이너리, 저장소 경량화 위해 제외) ---
+reference/
+
+# --- OS / 편집기 ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
