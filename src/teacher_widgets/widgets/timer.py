@@ -82,9 +82,19 @@ class TimerWidget(BaseWidget):
         if self.model.state == "running":
             self.model.pause()
             self.start_btn.setText("시작")
-        else:
+        elif self.model.state == "finished":
+            # 완료 상태에서 시작 → 리셋 후 시작
+            self.model.reset()
+            self.display_label.setText(format_mmss(self.model.remaining))
             self.model.start()
             self.start_btn.setText("일시정지")
+        else:
+            # idle / paused
+            self.model.start()
+            # start() 는 remaining > 0 일 때만 running 으로 전환
+            if self.model.state == "running":
+                self.start_btn.setText("일시정지")
+            # remaining == 0 인 idle 상태라면 버튼을 "시작" 그대로 유지
 
     def _reset(self) -> None:
         self.model.reset()

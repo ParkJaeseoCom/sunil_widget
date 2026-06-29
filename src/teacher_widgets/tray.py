@@ -28,8 +28,21 @@ def build_tray_menu(registry: WidgetRegistry) -> QtWidgets.QMenu:
             return handler
 
         action.toggled.connect(make_handler(name))
+
     menu.addSeparator()
     menu.addAction("종료")
+
+    # 메뉴가 열릴 때마다 각 위젯의 visible 상태를 registry 에서 다시 읽어 동기화.
+    # 신호를 차단한 채 setChecked 하여 toggle 핸들러가 재실행되지 않도록 한다.
+    def _refresh_checks() -> None:
+        for action in menu.actions():
+            name = action.text()
+            if action.isCheckable() and name in registry.names():
+                action.blockSignals(True)
+                action.setChecked(registry.is_visible(name))
+                action.blockSignals(False)
+
+    menu.aboutToShow.connect(_refresh_checks)
     return menu
 
 
