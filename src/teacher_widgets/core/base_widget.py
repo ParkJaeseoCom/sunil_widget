@@ -107,9 +107,6 @@ class BaseWidget(QtWidgets.QWidget):
         Top = QtCore.Qt.TopEdge
         Bottom = QtCore.Qt.BottomEdge
 
-        both_h = Left | Right
-        both_v = Top | Bottom
-
         if edges & Left and edges & Top:
             return QtCore.Qt.SizeFDiagCursor
         if edges & Right and edges & Bottom:

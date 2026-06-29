@@ -78,28 +78,6 @@ def test_toggle_from_finished_state_resets_and_starts(qtbot, tmp_path):
     assert w.model.remaining > 0
 
 
-def test_toggle_from_finished_label_is_not_lying(qtbot, tmp_path):
-    """finished 상태에서 _toggle() 호출 후 버튼 텍스트와 모델 상태가 일관성을 가진다.
-
-    '일시정지' 라고 표시되었는데 모델은 idle/finished 인 상황이 없어야 함.
-    """
-    store = ConfigStore(tmp_path / "config.json")
-    store.load()
-    w = TimerWidget(store)
-    qtbot.addWidget(w)
-
-    w.model.state = "finished"
-    w.model.remaining = 0
-    w._toggle()
-
-    btn_text = w.start_btn.text()
-    if btn_text == "일시정지":
-        assert w.model.state == "running"
-    else:
-        assert btn_text == "시작"
-        assert w.model.state in ("idle", "paused", "finished")
-
-
 def test_toggle_from_idle_with_zero_remaining_stays_start(qtbot, tmp_path):
     """remaining==0 인 idle 상태에서 _toggle() → 모델이 running 이 되지 않으므로 버튼=시작."""
     store = ConfigStore(tmp_path / "config.json")

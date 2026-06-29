@@ -1,4 +1,4 @@
-from PySide6 import QtCore
+from PySide6 import QtCore, QtGui
 
 from teacher_widgets.core.config_store import ConfigStore
 from teacher_widgets.core.base_widget import BaseWidget
@@ -8,6 +8,19 @@ def make_store(tmp_path):
     store = ConfigStore(tmp_path / "config.json")
     store.load()
     return store
+
+
+def _press_event(local: QtCore.QPoint, widget: BaseWidget) -> QtGui.QMouseEvent:
+    """좌클릭 MouseButtonPress 이벤트를 PySide6 6.x 시그니처로 생성."""
+    global_pos = widget.mapToGlobal(local)
+    return QtGui.QMouseEvent(
+        QtCore.QEvent.Type.MouseButtonPress,
+        QtCore.QPointF(local),
+        QtCore.QPointF(global_pos),
+        QtCore.Qt.LeftButton,
+        QtCore.Qt.LeftButton,
+        QtCore.Qt.NoModifier,
+    )
 
 
 def test_restore_geometry_applies_saved_position(qtbot, tmp_path):
@@ -106,29 +119,42 @@ def test_resize_persist_updates_config(qtbot, tmp_path):
     assert saved[3] == 200
 
 
-def test_minimum_size_enforced():
+def test_minimum_size_enforced(qtbot, tmp_path):
     """BaseWidget 최소 크기는 120×80 이어야 한다."""
-    from teacher_widgets.core.config_store import ConfigStore
-    import tempfile, pathlib
-    with tempfile.TemporaryDirectory() as td:
-        store = ConfigStore(pathlib.Path(td) / "c.json")
-        store.load()
-        w = BaseWidget("clock", store)
-        assert w.minimumWidth() == 120
-        assert w.minimumHeight() == 80
-        w.deleteLater()
-
-
-def test_no_resize_when_locked(qtbot, tmp_path):
-    """잠금 상태에서는 리사이즈 상태가 시작되지 않아야 한다."""
     store = make_store(tmp_path)
     w = BaseWidget("clock", store)
     qtbot.addWidget(w)
+    assert w.minimumWidth() == 120
+    assert w.minimumHeight() == 80
+
+
+def test_no_resize_when_locked(qtbot, tmp_path):
+    """잠금 상태에서 모서리 좌클릭 프레스를 디스패치해도 리사이즈가 시작되지 않는다."""
+    store = make_store(tmp_path)
+    w = BaseWidget("clock", store)
+    qtbot.addWidget(w)
+    w.setGeometry(0, 0, 200, 150)
     w.set_locked(True)
 
-    # 잠금 상태에서 마우스 프레스를 경계에서 시뮬레이션
-    w.setGeometry(0, 0, 200, 150)
-    press_event = QtCore.QEvent(QtCore.QEvent.MouseButtonPress)
-    # 직접 내부 상태 확인: 잠긴 상태에서는 _resize_start_global 이 None 이어야 함
-    assert w._locked is True
+    # 우하단 모서리(리사이즈 영역)에서 실제 좌클릭 프레스를 디스패치
+    w.mousePressEvent(_press_event(QtCore.QPoint(198, 148), w))
+
+    # 잠금 상태이므로 리사이즈 모드가 시작되지 않아야 함
     assert w._resize_start_global is None
+    assert not w._resize_edges
+
+
+def test_resize_starts_when_unlocked(qtbot, tmp_path):
+    """잠금 해제 상태에서 같은 모서리 프레스 시 리사이즈 모드가 시작된다 (양성 케이스)."""
+    store = make_store(tmp_path)
+    w = BaseWidget("clock", store)
+    qtbot.addWidget(w)
+    w.setGeometry(0, 0, 200, 150)
+    w.set_locked(False)
+
+    w.mousePressEvent(_press_event(QtCore.QPoint(198, 148), w))
+
+    # 잠금 해제 상태이므로 리사이즈 모드가 시작되어야 함
+    assert w._resize_start_global is not None
+    assert w._resize_edges & QtCore.Qt.RightEdge
+    assert w._resize_edges & QtCore.Qt.BottomEdge
