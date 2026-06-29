@@ -24,3 +24,6 @@ reference/
 Thumbs.db
 .idea/
 .vscode/
+
+# SDD 진행 원장 (스크래치)
+.superpowers/
