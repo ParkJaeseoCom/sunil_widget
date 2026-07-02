@@ -1,11 +1,15 @@
+import json
+
 from PySide6 import QtWidgets
 
+from teacher_widgets.core.config_store import ConfigStore
 from teacher_widgets.widgets.timetable import (
     parse_global_state,
     filter_lessons,
     cell_text,
     derive_targets,
     TargetDialog,
+    TimetableWidget,
     DAYS,
     PERIODS,
 )
@@ -140,3 +144,65 @@ def test_target_dialog_unknown_target_defaults_first(qtbot):
     dlg = TargetDialog(TARGETS, "class", "9-없음")
     qtbot.addWidget(dlg)
     assert dlg.values() == ("class", "1-진")
+
+
+CACHE_DATA = {
+    "fetched_at": "2026-07-02T10:00:00",
+    "table_name": "2026 기본 시간표",
+    "lessons": [
+        {"name": "국어", "teacher": "담임", "room": "교실",
+         "classId": "1-진", "day": "월", "period": 1},
+        {"name": "체육", "teacher": "1-3학년 체육", "room": "체육관",
+         "classId": "1-진", "day": "화", "period": 2},
+    ],
+}
+
+
+def make_widget(qtbot, tmp_path, cache=CACHE_DATA):
+    store = ConfigStore(tmp_path / "config.json")
+    store.load()
+    store.data["timetable"]["_skip_initial_fetch"] = True
+    if cache is not None:
+        cache_file = tmp_path / "cache" / "timetable.json"
+        cache_file.parent.mkdir(parents=True)
+        cache_file.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+    w = TimetableWidget(store)
+    qtbot.addWidget(w)
+    return store, w
+
+
+def test_widget_loads_cache_and_renders(qtbot, tmp_path):
+    store, w = make_widget(qtbot, tmp_path)
+    assert w.widget_name == "timetable"
+    assert "1-진" in w.header_label.text()
+    assert w._cells[("월", 1)].text() == "국어"
+    assert w._cells[("화", 2)].text() == "체육📍체육관"
+    assert w._cells[("금", 7)].text() == ""
+
+
+def test_widget_without_cache_shows_empty_state(qtbot, tmp_path):
+    store, w = make_widget(qtbot, tmp_path, cache=None)
+    assert "새로고침" in w.status_label.text() or "데이터 없음" in w.status_label.text()
+
+
+def test_apply_data_writes_cache_and_rerenders(qtbot, tmp_path):
+    store, w = make_widget(qtbot, tmp_path, cache=None)
+    w.apply_data(CACHE_DATA)
+    assert w._cells[("월", 1)].text() == "국어"
+    saved = json.loads((tmp_path / "cache" / "timetable.json").read_text(encoding="utf-8"))
+    assert saved["table_name"] == "2026 기본 시간표"
+
+
+def test_change_target_updates_config_and_grid(qtbot, tmp_path):
+    store, w = make_widget(qtbot, tmp_path)
+    # 다이얼로그 우회: 내부 상태 직접 적용 경로 검증
+    w._set_target("room", "체육관")
+    assert store.data["timetable"]["view_type"] == "room"
+    assert store.data["timetable"]["target"] == "체육관"
+    assert w._cells[("화", 2)].text() == "1-진"
+
+
+def test_fetch_failed_sets_status(qtbot, tmp_path):
+    store, w = make_widget(qtbot, tmp_path)
+    w._on_fetch_failed("timeout")
+    assert "갱신 실패" in w.status_label.text()
