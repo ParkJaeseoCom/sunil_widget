@@ -15,6 +15,9 @@ from .widgets.timer import TimerWidget
 from .widgets.memo import MemoWidget
 from .widgets.checklist import ChecklistWidget
 from .widgets.timetable import TimetableWidget
+from .widgets.weekly_plan import WeeklyPlanWidget
+from .widgets.meal import MealWidget
+from .widgets.weather import WeatherWidget
 
 
 def _config_path() -> Path:
@@ -39,6 +42,9 @@ def main() -> int:
     for nm in ("checklist", "checklist_1", "checklist_2", "checklist_3"):
         registry.register(nm, lambda store=store, nm=nm: ChecklistWidget(store, nm))
     registry.register("timetable", lambda: TimetableWidget(store))
+    registry.register("weekly_plan", lambda: WeeklyPlanWidget(store))
+    registry.register("meal", lambda: MealWidget(store))
+    registry.register("weather", lambda: WeatherWidget(store))
 
     # 최초 실행: config에 위젯 기록이 없으면 시계만 기본 표시
     if not store.data["widgets"]:

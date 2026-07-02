@@ -112,3 +112,15 @@ def test_tray_menu_lists_checklist_pool(qtbot, tmp_path):
     texts = [a.text() for a in menu.actions() if a.text()]
     for nm in ("checklist", "checklist_1", "checklist_2", "checklist_3"):
         assert nm in texts
+
+
+def test_tray_menu_lists_phase3_widgets(qtbot, tmp_path):
+    store = ConfigStore(tmp_path / "config.json")
+    store.load()
+    reg = WidgetRegistry(store)
+    for nm in ("weekly_plan", "meal", "weather"):
+        reg.register(nm, lambda nm=nm: BaseWidget(nm, store))
+    menu = build_tray_menu(reg)
+    texts = [a.text() for a in menu.actions() if a.text()]
+    for nm in ("weekly_plan", "meal", "weather"):
+        assert nm in texts
