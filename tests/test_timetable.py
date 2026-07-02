@@ -1,0 +1,114 @@
+from teacher_widgets.widgets.timetable import (
+    parse_global_state,
+    filter_lessons,
+    cell_text,
+    derive_targets,
+    DAYS,
+    PERIODS,
+)
+
+
+def _fs_lesson(name, teacher, room, class_id, day, period):
+    return {"mapValue": {"fields": {
+        "name": {"stringValue": name},
+        "teacher": {"stringValue": teacher},
+        "room": {"stringValue": room},
+        "classId": {"stringValue": class_id},
+        "day": {"stringValue": day},
+        "period": {"integerValue": str(period)},
+        "color": {"stringValue": "bg-red-100"},
+    }}}
+
+
+def _fs_doc(active_id, tables):
+    return {"fields": {
+        "activeTableId": {"stringValue": active_id},
+        "updatedAt": {"integerValue": "123"},
+        "timetables": {"arrayValue": {"values": [
+            {"mapValue": {"fields": {
+                "id": {"stringValue": tid},
+                "name": {"stringValue": tname},
+                "lessons": {"arrayValue": {"values": lessons}},
+            }}}
+            for tid, tname, lessons in tables
+        ]}},
+    }}
+
+
+SAMPLE = _fs_doc("t2", [
+    ("t1", "옛 시간표", [_fs_lesson("과학", "담임", "과학실", "3-진", "화", 2)]),
+    ("t2", "2026 기본 시간표", [
+        _fs_lesson("국어", "담임", "교실", "1-진", "월", 1),
+        _fs_lesson("체육", "1-3학년 체육", "체육관", "1-진", "월", 2),
+        _fs_lesson("영어", "1/2학년 영어R", "A어학실", "1-선", "월", 1),
+        _fs_lesson("음악", "1-3학년 음악", "음악실", "1-진", "화", 1),
+    ]),
+])
+
+
+def test_constants():
+    assert DAYS == ["월", "화", "수", "목", "금"]
+    assert PERIODS == [1, 2, 3, 4, 5, 6, 7]
+
+
+def test_parse_selects_active_table():
+    out = parse_global_state(SAMPLE)
+    assert out["table_name"] == "2026 기본 시간표"
+    assert len(out["lessons"]) == 4
+    first = out["lessons"][0]
+    assert first == {"name": "국어", "teacher": "담임", "room": "교실",
+                     "classId": "1-진", "day": "월", "period": 1}
+
+
+def test_parse_falls_back_to_first_table():
+    doc = _fs_doc("없는ID", [("t1", "유일", [_fs_lesson("수학", "담임", "교실", "2-미", "수", 3)])])
+    out = parse_global_state(doc)
+    assert out["table_name"] == "유일"
+    assert out["lessons"][0]["period"] == 3
+
+
+def test_parse_empty_doc():
+    assert parse_global_state({}) == {"table_name": "", "lessons": []}
+
+
+def test_filter_lessons_by_class():
+    lessons = parse_global_state(SAMPLE)["lessons"]
+    grid = filter_lessons(lessons, "class", "1-진")
+    assert set(grid.keys()) == {("월", 1), ("월", 2), ("화", 1)}
+    assert grid[("월", 1)][0]["name"] == "국어"
+
+
+def test_filter_lessons_by_room_and_teacher():
+    lessons = parse_global_state(SAMPLE)["lessons"]
+    assert list(filter_lessons(lessons, "room", "체육관"))[0] == ("월", 2)
+    assert list(filter_lessons(lessons, "teacher", "1/2학년 영어R"))[0] == ("월", 1)
+
+
+def test_cell_text_class_view_shows_special_room():
+    entries = [{"name": "체육", "room": "체육관", "classId": "1-진"}]
+    assert cell_text(entries, "class") == "체육📍체육관"
+    entries2 = [{"name": "국어", "room": "교실", "classId": "1-진"}]
+    assert cell_text(entries2, "class") == "국어"
+
+
+def test_cell_text_other_views_show_class_and_merge():
+    entries = [
+        {"name": "영어", "room": "A어학실", "classId": "1-선"},
+        {"name": "영어", "room": "A어학실", "classId": "1-진"},
+    ]
+    assert cell_text(entries, "room") == "1-선/1-진"
+    assert cell_text([], "class") == ""
+
+
+def test_cell_text_overflow():
+    entries = [{"name": f"과목{i}", "room": "교실", "classId": f"{i}-진"} for i in range(5)]
+    text = cell_text(entries, "class")
+    assert "외 2" in text
+
+
+def test_derive_targets_sorted_unique():
+    lessons = parse_global_state(SAMPLE)["lessons"]
+    targets = derive_targets(lessons)
+    assert targets["class"] == ["1-선", "1-진"]
+    assert "체육관" in targets["room"]
+    assert "1-3학년 체육" in targets["teacher"]
