@@ -2,6 +2,7 @@ from PySide6 import QtWidgets
 
 from teacher_widgets.core.config_store import ConfigStore
 from teacher_widgets.widgets.checklist import (
+    ChecklistWidget,
     RosterDialog,
     TitleDialog,
     get_title,
@@ -72,3 +73,62 @@ def test_title_dialog_returns_value(qtbot):
     assert dlg.value() == "숙제"
     dlg.edit.setText("우유 확인")
     assert dlg.value() == "우유 확인"
+
+
+def test_widget_builds_grid_from_roster(qtbot, tmp_path):
+    store = make_store(tmp_path)
+    store.set_roster(3, 2)  # 1,2,3,51,52
+    w = ChecklistWidget(store, "checklist")
+    qtbot.addWidget(w)
+    assert sorted(w._buttons.keys()) == [1, 2, 3, 51, 52]
+
+
+def test_widget_toggle_updates_count_and_config(qtbot, tmp_path):
+    store = make_store(tmp_path)
+    store.set_roster(3, 0)
+    w = ChecklistWidget(store, "checklist")
+    qtbot.addWidget(w)
+    assert "0/3" in w.count_label.text()
+    w._on_toggle(2)
+    assert "1/3" in w.count_label.text()
+    assert 2 in store.data["checklists"]["checklist"]["checked"]
+
+
+def test_widget_reset_clears_all(qtbot, tmp_path):
+    store = make_store(tmp_path)
+    store.set_roster(3, 0)
+    w = ChecklistWidget(store, "checklist")
+    qtbot.addWidget(w)
+    w._on_toggle(1)
+    w._on_toggle(2)
+    w.reset()
+    assert "0/3" in w.count_label.text()
+    assert store.data["checklists"]["checklist"]["checked"] == []
+
+
+def test_widget_title_from_config(qtbot, tmp_path):
+    store = make_store(tmp_path)
+    set_title(store, "checklist", "숙제 검사")
+    w = ChecklistWidget(store, "checklist")
+    qtbot.addWidget(w)
+    assert w.title_label.text() == "숙제 검사"
+
+
+def test_widget_change_roster_rebuilds_grid(qtbot, tmp_path):
+    store = make_store(tmp_path)
+    store.set_roster(2, 0)
+    w = ChecklistWidget(store, "checklist")
+    qtbot.addWidget(w)
+    assert sorted(w._buttons.keys()) == [1, 2]
+    # roster 변경을 직접 적용(다이얼로그 우회)
+    store.set_roster(2, 1)
+    store.save()
+    w.rebuild_grid()
+    assert sorted(w._buttons.keys()) == [1, 2, 51]
+
+
+def test_widget_name_passed_to_base(qtbot, tmp_path):
+    store = make_store(tmp_path)
+    w = ChecklistWidget(store, "checklist_2")
+    qtbot.addWidget(w)
+    assert w.widget_name == "checklist_2"
