@@ -72,3 +72,13 @@ def test_set_roster_roundtrip(tmp_path):
     reloaded = ConfigStore(path)
     reloaded.load()
     assert reloaded.get_roster() == (10, 12)
+
+
+def test_default_timetable_settings(tmp_path):
+    store = ConfigStore(tmp_path / "config.json")
+    store.load()
+    tt = store.data["timetable"]
+    assert tt["view_type"] == "class"
+    assert tt["target"] == "1-진"
+    assert tt["project_id"] == "sunil-time-table"
+    assert tt["refresh_minutes"] == 60

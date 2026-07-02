@@ -13,6 +13,15 @@ DEFAULT_CONFIG: dict = {
     "widget_opacity": 96,
     "layout_locked": False,
     "class_roster": {"boys": 14, "girls": 14},
+    "timetable": {
+        "api_key": "AIzaSyBLatEhyjsQDPNJVO5FWQHPfkdyaTQhrR0",
+        "project_id": "sunil-time-table",
+        "artifact_app_id": "seonil-timetable-v1",
+        "webapp_url": "https://sunil-timetable.vercel.app/",
+        "view_type": "class",
+        "target": "1-진",
+        "refresh_minutes": 60,
+    },
     "widgets": {},
 }
 
