@@ -10,6 +10,7 @@ from teacher_widgets.widgets.checklist import (
     get_checked,
     set_checked,
     toggle,
+    roster_bus,
 )
 
 
@@ -132,3 +133,37 @@ def test_widget_name_passed_to_base(qtbot, tmp_path):
     w = ChecklistWidget(store, "checklist_2")
     qtbot.addWidget(w)
     assert w.widget_name == "checklist_2"
+
+
+def test_update_count_excludes_stale_out_of_range_checks(qtbot, tmp_path):
+    store = make_store(tmp_path)
+    store.set_roster(5, 0)
+    w = ChecklistWidget(store, "checklist")
+    qtbot.addWidget(w)
+    w._on_toggle(4)
+    w._on_toggle(5)
+    # 학급 인원을 축소: 4, 5는 더 이상 유효 번호가 아님
+    store.set_roster(3, 0)
+    store.save()
+    w.rebuild_grid()
+    assert w.count_label.text() == "제출 0/3"
+    # stale 데이터는 config에 그대로 보존됨 (spec 요구사항)
+    assert store.data["checklists"]["checklist"]["checked"] == [4, 5]
+
+
+def test_roster_change_propagates_to_all_live_widgets(qtbot, tmp_path):
+    store = make_store(tmp_path)
+    store.set_roster(2, 0)
+    w1 = ChecklistWidget(store, "checklist")
+    w2 = ChecklistWidget(store, "checklist_1")
+    qtbot.addWidget(w1)
+    qtbot.addWidget(w2)
+    assert sorted(w1._buttons.keys()) == [1, 2]
+    assert sorted(w2._buttons.keys()) == [1, 2]
+
+    store.set_roster(2, 1)
+    store.save()
+    roster_bus.changed.emit()
+
+    assert sorted(w1._buttons.keys()) == [1, 2, 51]
+    assert sorted(w2._buttons.keys()) == [1, 2, 51]

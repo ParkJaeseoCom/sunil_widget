@@ -15,7 +15,20 @@ from teacher_widgets.core.roster import roster_numbers
 _DEFAULT_TITLE = "체크"
 
 
+class _RosterBus(QtCore.QObject):
+    """학급 구성 변경을 모든 열린 체크 위젯 인스턴스에 알리는 시그널 버스.
+
+    Qt는 수신자(위젯)가 파괴되면 연결을 자동 해제하므로 별도 정리가 필요 없다.
+    """
+
+    changed = QtCore.Signal()
+
+
+roster_bus = _RosterBus()
+
+
 def _slot(store: ConfigStore, name: str) -> dict:
+    # 주의: setdefault를 사용하므로 조회만 해도(getter) config에 슬롯이 생성된다.
     checklists = store.data.setdefault("checklists", {})
     return checklists.setdefault(name, {"title": _DEFAULT_TITLE, "checked": []})
 
@@ -123,6 +136,8 @@ class ChecklistWidget(BaseWidget):
         self.content_layout.addStretch(1)
         self.content_layout.addWidget(reset_btn)
 
+        roster_bus.changed.connect(self.rebuild_grid)
+
         self.rebuild_grid()
 
     def paintEvent(self, event):
@@ -159,9 +174,9 @@ class ChecklistWidget(BaseWidget):
 
     def update_count(self) -> None:
         boys, girls = self.store.get_roster()
-        total = boys + girls
-        done = len(get_checked(self.store, self.widget_name))
-        self.count_label.setText(f"제출 {done}/{total}")
+        valid = set(roster_numbers(boys, girls))
+        done = len(get_checked(self.store, self.widget_name) & valid)
+        self.count_label.setText(f"제출 {done}/{len(valid)}")
 
     def _on_toggle(self, number: int) -> None:
         toggle(self.store, self.widget_name, number)
@@ -197,7 +212,7 @@ class ChecklistWidget(BaseWidget):
             new_boys, new_girls = dlg.values()
             self.store.set_roster(new_boys, new_girls)
             self.store.save()
-            self.rebuild_grid()
+            roster_bus.changed.emit()
 
     # --- 반응형 ---
     def _apply_responsive(self) -> None:
