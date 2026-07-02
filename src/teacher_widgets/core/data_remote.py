@@ -7,8 +7,60 @@ HTTP 함수는 얇게 유지하고 테스트하지 않는다(파싱·캐시는 �
 from __future__ import annotations
 
 import json
+import ssl
 import urllib.request
 from pathlib import Path
+
+_CTX: ssl.SSLContext | None = None
+
+
+def _ssl_context() -> ssl.SSLContext:
+    """공용 SSL 컨텍스트: 체인 검증은 유지하되 X509 strict만 해제.
+
+    Python 3.13+ 기본 VERIFY_X509_STRICT가 나이스 등 정부 인증서
+    (Authority Key Identifier 누락)를 거부하는 문제의 우회.
+    """
+    global _CTX
+    if _CTX is None:
+        _CTX = ssl.create_default_context()
+        _CTX.verify_flags &= ~ssl.VERIFY_X509_STRICT
+    return _CTX
+
+
+def http_get_json(url: str, headers: dict | None = None, timeout: int = 20) -> dict:
+    """공용 GET(JSON). 정부 API 대응 컨텍스트 사용."""
+    req = urllib.request.Request(url, headers=headers or {})
+    with urllib.request.urlopen(req, timeout=timeout, context=_ssl_context()) as r:
+        return json.load(r)
+
+
+def _rows_to_documents(rows: list) -> list[dict]:
+    """runQuery 응답 행에서 document만 추출(순수 — 테스트 대상)."""
+    return [row["document"] for row in rows if "document" in row]
+
+
+def firestore_run_query(
+    project_id: str,
+    parent_path: str,
+    structured_query: dict,
+    id_token: str,
+    timeout: int = 30,
+) -> list[dict]:
+    """Firestore REST :runQuery — document 행만 반환."""
+    url = (
+        f"https://firestore.googleapis.com/v1/projects/{project_id}"
+        f"/databases/(default)/documents/{parent_path}:runQuery"
+    )
+    req = urllib.request.Request(
+        url,
+        data=json.dumps({"structuredQuery": structured_query}).encode(),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {id_token}",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=timeout, context=_ssl_context()) as r:
+        return _rows_to_documents(json.load(r))
 
 
 def anon_sign_in(api_key: str, timeout: int = 15) -> str:
@@ -19,7 +71,7 @@ def anon_sign_in(api_key: str, timeout: int = 15) -> str:
         data=json.dumps({"returnSecureToken": True}).encode(),
         headers={"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with urllib.request.urlopen(req, timeout=timeout, context=_ssl_context()) as r:
         return json.load(r)["idToken"]
 
 
@@ -32,7 +84,7 @@ def firestore_get_document(
         f"/databases/(default)/documents/{doc_path}"
     )
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {id_token}"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with urllib.request.urlopen(req, timeout=timeout, context=_ssl_context()) as r:
         return json.load(r)
 
 

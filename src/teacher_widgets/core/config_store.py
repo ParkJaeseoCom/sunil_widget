@@ -22,6 +22,24 @@ DEFAULT_CONFIG: dict = {
         "target": "1-진",
         "refresh_minutes": 60,
     },
+    "weekly_plan": {
+        "api_key": "AIzaSyA2R8xghbMYtVDvo1D0QbxKnfDSwoSPszU",
+        "project_id": "sunil-edu-plan",
+        "artifact_app_id": "sunil-edu-plan",
+        "webapp_url": "https://sunil-edu-plan.vercel.app/",
+        "refresh_minutes": 30,
+    },
+    "meal": {
+        "edu_code": "B10",
+        "school_code": "7031170",
+        "api_key": "",
+        "refresh_minutes": 360,
+    },
+    "weather": {
+        "lat": 37.617,
+        "lon": 126.921,
+        "refresh_minutes": 30,
+    },
     "widgets": {},
 }
 

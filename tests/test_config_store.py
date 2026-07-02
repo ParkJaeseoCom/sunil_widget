@@ -83,3 +83,15 @@ def test_default_timetable_settings(tmp_path):
     assert tt["target"] == "1-진"
     assert tt["project_id"] == "sunil-time-table"
     assert tt["refresh_minutes"] == 60
+
+
+def test_default_phase3_settings(tmp_path):
+    store = ConfigStore(tmp_path / "config.json")
+    store.load()
+    assert store.data["weekly_plan"]["project_id"] == "sunil-edu-plan"
+    assert store.data["weekly_plan"]["refresh_minutes"] == 30
+    assert store.data["meal"]["edu_code"] == "B10"
+    assert store.data["meal"]["school_code"] == "7031170"
+    assert store.data["meal"]["api_key"] == ""
+    assert store.data["weather"]["lat"] == 37.617
+    assert store.data["weather"]["refresh_minutes"] == 30
