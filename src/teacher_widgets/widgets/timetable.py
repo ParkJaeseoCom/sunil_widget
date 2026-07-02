@@ -7,6 +7,9 @@ FetchWorker·TimetableWidget은 Task 4~5에서 추가된다.
 from __future__ import annotations
 
 import datetime
+import shutil
+import subprocess
+import webbrowser
 from pathlib import Path
 
 from PySide6 import QtCore, QtGui, QtWidgets
@@ -107,6 +110,15 @@ def derive_targets(lessons: list) -> dict:
     return {k: sorted(v) for k, v in out.items()}
 
 
+def build_app_command(url: str) -> list[str] | None:
+    """앱 모드(--app) 실행 명령. Edge 우선, Chrome 차선, 없으면 None."""
+    for exe in ("msedge", "chrome"):
+        path = shutil.which(exe)
+        if path:
+            return [path, f"--app={url}"]
+    return None
+
+
 class TargetDialog(QtWidgets.QDialog):
     """시간표 대상 선택: 유형(학급/특별실/전담) + 대상 콤보."""
 
@@ -192,6 +204,7 @@ class TimetableWidget(BaseWidget):
         self.cache_path = Path(store.path).parent / "cache" / "timetable.json"
         self._data: dict | None = None
         self._worker: FetchWorker | None = None
+        self._web_proc = None
         self._cells: dict[tuple[str, int], QtWidgets.QLabel] = {}
 
         self.header_label = QtWidgets.QLabel("", alignment=QtCore.Qt.AlignCenter)
@@ -302,9 +315,41 @@ class TimetableWidget(BaseWidget):
             if target:
                 self._set_target(view_type, target)
 
-    # --- 웹앱 (Task 5에서 구현) ---
+    # --- 웹앱 ---
     def open_webapp(self) -> None:
-        pass
+        url = self.store.data["timetable"].get("webapp_url", "")
+        if not url:
+            return
+        # 이전에 띄운 앱 창이 살아있으면 맨 앞으로 (best-effort)
+        if self._web_proc is not None and self._web_proc.poll() is None:
+            self._bring_web_to_front()
+            return
+        cmd = build_app_command(url)
+        if cmd:
+            self._web_proc = subprocess.Popen(cmd)
+        else:
+            webbrowser.open(url)
+
+    def _bring_web_to_front(self) -> None:
+        """자식 프로세스의 최상위 창을 앞으로. 실패해도 무해(best-effort)."""
+        try:
+            import ctypes
+
+            user32 = ctypes.windll.user32
+            pid = self._web_proc.pid
+
+            @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+            def enum_handler(hwnd, _lparam):
+                found_pid = ctypes.c_ulong()
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(found_pid))
+                if found_pid.value == pid and user32.IsWindowVisible(hwnd):
+                    user32.SetForegroundWindow(hwnd)
+                    return False  # 중단
+                return True
+
+            user32.EnumWindows(enum_handler, 0)
+        except Exception:
+            pass  # 브라우저가 기존 프로세스에 위임한 경우 등 — 조용히 무시
 
     def mouseDoubleClickEvent(self, event) -> None:
         self.open_webapp()

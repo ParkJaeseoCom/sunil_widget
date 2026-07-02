@@ -3,11 +3,13 @@ import json
 from PySide6 import QtWidgets
 
 from teacher_widgets.core.config_store import ConfigStore
+from teacher_widgets.widgets import timetable as tt_mod
 from teacher_widgets.widgets.timetable import (
     parse_global_state,
     filter_lessons,
     cell_text,
     derive_targets,
+    build_app_command,
     TargetDialog,
     TimetableWidget,
     DAYS,
@@ -206,3 +208,22 @@ def test_fetch_failed_sets_status(qtbot, tmp_path):
     store, w = make_widget(qtbot, tmp_path)
     w._on_fetch_failed("timeout")
     assert "갱신 실패" in w.status_label.text()
+
+
+def test_build_app_command_prefers_edge(monkeypatch):
+    monkeypatch.setattr(tt_mod.shutil, "which",
+                        lambda exe: r"C:\edge\msedge.exe" if exe == "msedge" else None)
+    cmd = build_app_command("https://example.com/")
+    assert cmd == [r"C:\edge\msedge.exe", "--app=https://example.com/"]
+
+
+def test_build_app_command_falls_back_to_chrome(monkeypatch):
+    monkeypatch.setattr(tt_mod.shutil, "which",
+                        lambda exe: r"C:\chrome\chrome.exe" if exe == "chrome" else None)
+    cmd = build_app_command("https://example.com/")
+    assert cmd[0].endswith("chrome.exe")
+
+
+def test_build_app_command_none_when_no_browser(monkeypatch):
+    monkeypatch.setattr(tt_mod.shutil, "which", lambda exe: None)
+    assert build_app_command("https://example.com/") is None
