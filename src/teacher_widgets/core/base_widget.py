@@ -199,12 +199,27 @@ class BaseWidget(QtWidgets.QWidget):
         """서브클래스가 반응형 갱신을 위해 오버라이드."""
 
     # --- 우클릭 메뉴 ---
+    def _custom_menu_actions(self, menu: QtWidgets.QMenu) -> dict:
+        """서브클래스가 컨텍스트 메뉴에 항목을 추가하는 훅.
+
+        {QAction: callable} 을 반환하면 잠금/닫기 위에 표시되고
+        선택 시 해당 callable 이 호출된다. 기본은 항목 없음.
+        """
+        return {}
+
     def _show_menu(self, pos: QtCore.QPoint) -> None:
         menu = QtWidgets.QMenu(self)
+        custom = self._custom_menu_actions(menu)
+        if custom:
+            menu.addSeparator()
         lock_action = menu.addAction("이동 잠금 해제" if self._locked else "이동 잠금")
         close_action = menu.addAction("이 위젯 닫기")
         chosen = menu.exec(self.mapToGlobal(pos))
-        if chosen == lock_action:
+        if chosen is None:
+            return
+        if chosen in custom:
+            custom[chosen]()
+        elif chosen == lock_action:
             self.set_locked(not self._locked)
         elif chosen == close_action:
             self.hide_to_config()

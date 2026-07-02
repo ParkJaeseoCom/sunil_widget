@@ -1,4 +1,4 @@
-from PySide6 import QtCore, QtGui
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from teacher_widgets.core.config_store import ConfigStore
 from teacher_widgets.core.base_widget import BaseWidget
@@ -158,3 +158,30 @@ def test_resize_starts_when_unlocked(qtbot, tmp_path):
     assert w._resize_start_global is not None
     assert w._resize_edges & QtCore.Qt.RightEdge
     assert w._resize_edges & QtCore.Qt.BottomEdge
+
+
+def test_custom_menu_actions_default_empty(qtbot, tmp_path):
+    store = make_store(tmp_path)
+    w = BaseWidget("clock", store)
+    qtbot.addWidget(w)
+    menu = QtWidgets.QMenu()
+    assert w._custom_menu_actions(menu) == {}
+
+
+def test_custom_menu_actions_subclass_callback_invoked(qtbot, tmp_path):
+    store = make_store(tmp_path)
+    calls = []
+
+    class Sub(BaseWidget):
+        def _custom_menu_actions(self, menu):
+            act = menu.addAction("테스트 동작")
+            return {act: lambda: calls.append("ran")}
+
+    w = Sub("clock", store)
+    qtbot.addWidget(w)
+    menu = QtWidgets.QMenu()
+    custom = w._custom_menu_actions(menu)
+    assert len(custom) == 1
+    # 콜백 직접 실행으로 배선 검증
+    list(custom.values())[0]()
+    assert calls == ["ran"]
