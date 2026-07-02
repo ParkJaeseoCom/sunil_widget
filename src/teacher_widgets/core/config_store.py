@@ -12,6 +12,7 @@ DEFAULT_CONFIG: dict = {
     "theme": "pastel",
     "widget_opacity": 96,
     "layout_locked": False,
+    "class_roster": {"boys": 14, "girls": 14},
     "widgets": {},
 }
 
@@ -72,3 +73,10 @@ class ConfigStore:
 
     def set_opacity(self, percent: int) -> None:
         self.data["widget_opacity"] = int(percent)
+
+    def get_roster(self) -> tuple[int, int]:
+        roster = self.data["class_roster"]
+        return int(roster["boys"]), int(roster["girls"])
+
+    def set_roster(self, boys: int, girls: int) -> None:
+        self.data["class_roster"] = {"boys": int(boys), "girls": int(girls)}

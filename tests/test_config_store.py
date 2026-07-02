@@ -53,3 +53,22 @@ def test_get_widget_returns_isolated_copy(tmp_path):
     w = store.get_widget("clock")
     w["visible"] = False
     assert store.get_widget("clock")["visible"] is True
+
+
+def test_default_roster(tmp_path):
+    store = ConfigStore(tmp_path / "config.json")
+    store.load()
+    assert store.get_roster() == (14, 14)
+
+
+def test_set_roster_roundtrip(tmp_path):
+    path = tmp_path / "config.json"
+    store = ConfigStore(path)
+    store.load()
+    store.set_roster(10, 12)
+    assert store.get_roster() == (10, 12)
+    store.save()
+
+    reloaded = ConfigStore(path)
+    reloaded.load()
+    assert reloaded.get_roster() == (10, 12)
