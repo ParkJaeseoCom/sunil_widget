@@ -49,3 +49,16 @@ def test_restore_visible_only_shows_visible(qtbot, tmp_path):
     reg.restore_visible()
     assert reg.is_visible("clock") is True
     assert reg.is_visible("timer") is False
+
+
+def test_restore_visible_fresh_config_shows_nothing(qtbot, tmp_path):
+    """미기록 config 에서는 명시적으로 켠 위젯만 보여야 한다(첫 실행 '시계만 표시')."""
+    store = ConfigStore(tmp_path / "config.json")
+    store.load()
+    reg = WidgetRegistry(store)
+    reg.register("clock", lambda: BaseWidget("clock", store))
+    reg.register("timer", lambda: BaseWidget("timer", store))
+    store.set_widget_visible("clock", True)  # main.py 첫 실행 가드와 동일
+    reg.restore_visible()
+    assert reg.is_visible("clock") is True
+    assert reg.is_visible("timer") is False

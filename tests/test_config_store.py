@@ -35,7 +35,8 @@ def test_get_widget_unknown_returns_default_geometry(tmp_path):
     store = ConfigStore(tmp_path / "config.json")
     store.load()
     w = store.get_widget("memo_3")
-    assert w["visible"] is True
+    # 미기록 위젯은 기본 숨김 — 첫 실행 '시계만 표시' 보장
+    assert w["visible"] is False
     assert len(w["geometry"]) == 4
 
 

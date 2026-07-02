@@ -208,6 +208,61 @@ def test_fetch_failed_sets_status(qtbot, tmp_path):
     store, w = make_widget(qtbot, tmp_path)
     w._on_fetch_failed("timeout")
     assert "갱신 실패" in w.status_label.text()
+    assert w.toolTip() == "timeout"
+
+
+class _FakeRunningWorker:
+    """isRunning()=True 인 워커를 흉내내며 wait() 호출을 기록."""
+
+    def __init__(self):
+        self.wait_calls: list[int] = []
+
+    def isRunning(self) -> bool:
+        return True
+
+    def wait(self, ms: int) -> bool:
+        self.wait_calls.append(ms)
+        return True
+
+
+def test_shutdown_worker_waits_bounded_when_running(qtbot, tmp_path):
+    store, w = make_widget(qtbot, tmp_path)
+    fake = _FakeRunningWorker()
+    w._worker = fake
+    w._shutdown_worker()
+    assert fake.wait_calls == [2000]
+
+
+def test_shutdown_worker_noop_when_no_worker(qtbot, tmp_path):
+    store, w = make_widget(qtbot, tmp_path)
+    w._worker = None
+    w._shutdown_worker()  # 예외 없이 통과해야 함
+
+
+def test_shutdown_worker_connected_to_about_to_quit(qtbot, tmp_path):
+    store, w = make_widget(qtbot, tmp_path)
+    app = QtWidgets.QApplication.instance()
+    fake = _FakeRunningWorker()
+    w._worker = fake
+    app.aboutToQuit.emit()
+    assert fake.wait_calls == [2000]
+
+
+# ---------------------------------------------------------------------------
+# Fix 2: 숨김 상태에서는 fetch 타이머가 돌지 않아야 한다
+# ---------------------------------------------------------------------------
+
+def test_refresh_timer_not_started_until_shown(qtbot, tmp_path):
+    store, w = make_widget(qtbot, tmp_path)
+    assert w._refresh_timer.isActive() is False
+
+
+def test_show_starts_timer_and_hide_stops_it(qtbot, tmp_path):
+    store, w = make_widget(qtbot, tmp_path)
+    w.show()
+    assert w._refresh_timer.isActive() is True
+    w.hide()
+    assert w._refresh_timer.isActive() is False
 
 
 def test_build_app_command_prefers_edge(monkeypatch):

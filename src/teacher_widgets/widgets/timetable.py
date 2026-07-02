@@ -242,11 +242,28 @@ class TimetableWidget(BaseWidget):
             self.status_label.setText("데이터 없음 — 우클릭 → 새로고침")
 
         self._refresh_timer = QtCore.QTimer(self)
-        minutes = int(self.store.data["timetable"].get("refresh_minutes", 60))
         self._refresh_timer.timeout.connect(self.refresh)
+
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(self._shutdown_worker)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        minutes = int(self.store.data["timetable"].get("refresh_minutes", 60))
         self._refresh_timer.start(minutes * 60 * 1000)
         if not self.store.data["timetable"].get("_skip_initial_fetch", False):
             self.refresh()
+
+    def hideEvent(self, event) -> None:
+        super().hideEvent(event)
+        self._refresh_timer.stop()
+
+    def _shutdown_worker(self) -> None:
+        """앱 종료 시 진행 중인 fetch를 제한 시간 내에서 기다린다."""
+        worker = self._worker
+        if worker is not None and worker.isRunning():
+            worker.wait(2000)  # 무한 대기 금지 — 네트워크 타임아웃보다 짧게
 
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
@@ -270,6 +287,7 @@ class TimetableWidget(BaseWidget):
 
     def _on_fetch_failed(self, msg: str) -> None:
         self.status_label.setText("갱신 실패 — 캐시 표시 중")
+        self.setToolTip(msg)
 
     def apply_data(self, data: dict) -> None:
         self._data = data

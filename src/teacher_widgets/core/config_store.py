@@ -6,7 +6,7 @@ import json
 from copy import deepcopy
 from pathlib import Path
 
-DEFAULT_WIDGET = {"visible": True, "geometry": [100, 100, 220, 140]}
+DEFAULT_WIDGET = {"visible": False, "geometry": [100, 100, 220, 140]}
 
 DEFAULT_CONFIG: dict = {
     "theme": "pastel",
