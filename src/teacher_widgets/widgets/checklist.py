@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from PySide6 import QtWidgets
+
 from teacher_widgets.core.config_store import ConfigStore
 
 _DEFAULT_TITLE = "체크"
@@ -43,3 +45,48 @@ def toggle(store: ConfigStore, name: str, number: int) -> bool:
         result = True
     set_checked(store, name, checked)
     return result
+
+
+class RosterDialog(QtWidgets.QDialog):
+    def __init__(self, boys: int, girls: int, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("학급 구성 설정")
+        form = QtWidgets.QFormLayout(self)
+
+        self.boys_spin = QtWidgets.QSpinBox()
+        self.boys_spin.setRange(0, 30)
+        self.boys_spin.setValue(int(boys))
+        self.girls_spin = QtWidgets.QSpinBox()
+        self.girls_spin.setRange(0, 30)
+        self.girls_spin.setValue(int(girls))
+
+        form.addRow("남학생 수", self.boys_spin)
+        form.addRow("여학생 수", self.girls_spin)
+
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        form.addRow(buttons)
+
+    def values(self) -> tuple[int, int]:
+        return self.boys_spin.value(), self.girls_spin.value()
+
+
+class TitleDialog(QtWidgets.QDialog):
+    def __init__(self, title: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("제목 변경")
+        layout = QtWidgets.QVBoxLayout(self)
+        self.edit = QtWidgets.QLineEdit(title)
+        layout.addWidget(self.edit)
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def value(self) -> str:
+        return self.edit.text()

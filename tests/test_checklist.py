@@ -1,5 +1,9 @@
+from PySide6 import QtWidgets
+
 from teacher_widgets.core.config_store import ConfigStore
 from teacher_widgets.widgets.checklist import (
+    RosterDialog,
+    TitleDialog,
     get_title,
     set_title,
     get_checked,
@@ -44,3 +48,27 @@ def test_instances_are_independent(tmp_path):
     set_checked(store, "checklist_1", {51})
     assert get_checked(store, "checklist") == {1}
     assert get_checked(store, "checklist_1") == {51}
+
+
+def test_roster_dialog_returns_values(qtbot):
+    dlg = RosterDialog(10, 12)
+    qtbot.addWidget(dlg)
+    assert dlg.values() == (10, 12)
+    dlg.boys_spin.setValue(8)
+    dlg.girls_spin.setValue(9)
+    assert dlg.values() == (8, 9)
+
+
+def test_roster_dialog_clamps_range(qtbot):
+    dlg = RosterDialog(0, 0)
+    qtbot.addWidget(dlg)
+    dlg.boys_spin.setValue(999)  # 최대 30으로 클램프
+    assert dlg.values()[0] == 30
+
+
+def test_title_dialog_returns_value(qtbot):
+    dlg = TitleDialog("숙제")
+    qtbot.addWidget(dlg)
+    assert dlg.value() == "숙제"
+    dlg.edit.setText("우유 확인")
+    assert dlg.value() == "우유 확인"
