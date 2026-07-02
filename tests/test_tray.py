@@ -100,3 +100,15 @@ def test_tray_refresh_checks_when_shown_via_config(qtbot, tmp_path):
     menu.aboutToShow.emit()
 
     assert clock_action.isChecked() is True
+
+
+def test_tray_menu_lists_checklist_pool(qtbot, tmp_path):
+    store = ConfigStore(tmp_path / "config.json")
+    store.load()
+    reg = WidgetRegistry(store)
+    for nm in ("checklist", "checklist_1", "checklist_2", "checklist_3"):
+        reg.register(nm, lambda nm=nm: BaseWidget(nm, store))
+    menu = build_tray_menu(reg)
+    texts = [a.text() for a in menu.actions() if a.text()]
+    for nm in ("checklist", "checklist_1", "checklist_2", "checklist_3"):
+        assert nm in texts
