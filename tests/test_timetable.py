@@ -1,11 +1,16 @@
+from PySide6 import QtWidgets
+
 from teacher_widgets.widgets.timetable import (
     parse_global_state,
     filter_lessons,
     cell_text,
     derive_targets,
+    TargetDialog,
     DAYS,
     PERIODS,
 )
+
+TARGETS = {"class": ["1-진", "1-선"], "room": ["체육관"], "teacher": ["컴퓨터"]}
 
 
 def _fs_lesson(name, teacher, room, class_id, day, period):
@@ -112,3 +117,26 @@ def test_derive_targets_sorted_unique():
     assert targets["class"] == ["1-선", "1-진"]
     assert "체육관" in targets["room"]
     assert "1-3학년 체육" in targets["teacher"]
+
+
+def test_target_dialog_initial_state(qtbot):
+    dlg = TargetDialog(TARGETS, "class", "1-선")
+    qtbot.addWidget(dlg)
+    assert dlg.class_radio.isChecked()
+    assert dlg.target_combo.currentText() == "1-선"
+    assert dlg.values() == ("class", "1-선")
+
+
+def test_target_dialog_switch_type_repopulates(qtbot):
+    dlg = TargetDialog(TARGETS, "class", "1-진")
+    qtbot.addWidget(dlg)
+    dlg.room_radio.setChecked(True)
+    items = [dlg.target_combo.itemText(i) for i in range(dlg.target_combo.count())]
+    assert items == ["체육관"]
+    assert dlg.values() == ("room", "체육관")
+
+
+def test_target_dialog_unknown_target_defaults_first(qtbot):
+    dlg = TargetDialog(TARGETS, "class", "9-없음")
+    qtbot.addWidget(dlg)
+    assert dlg.values() == ("class", "1-진")

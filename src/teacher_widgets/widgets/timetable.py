@@ -6,6 +6,8 @@ FetchWorker·TimetableWidget은 Task 4~5에서 추가된다.
 
 from __future__ import annotations
 
+from PySide6 import QtWidgets
+
 DAYS = ["월", "화", "수", "목", "금"]
 PERIODS = [1, 2, 3, 4, 5, 6, 7]
 
@@ -90,3 +92,55 @@ def derive_targets(lessons: list) -> dict:
         if lesson.get("teacher"):
             out["teacher"].add(lesson["teacher"])
     return {k: sorted(v) for k, v in out.items()}
+
+
+class TargetDialog(QtWidgets.QDialog):
+    """시간표 대상 선택: 유형(학급/특별실/전담) + 대상 콤보."""
+
+    def __init__(self, targets: dict, view_type: str, target: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("대상 변경")
+        self._targets = targets
+
+        layout = QtWidgets.QVBoxLayout(self)
+
+        radios = QtWidgets.QHBoxLayout()
+        self.class_radio = QtWidgets.QRadioButton("학급")
+        self.room_radio = QtWidgets.QRadioButton("특별실")
+        self.teacher_radio = QtWidgets.QRadioButton("전담")
+        for r in (self.class_radio, self.room_radio, self.teacher_radio):
+            radios.addWidget(r)
+            r.toggled.connect(self._repopulate)
+        layout.addLayout(radios)
+
+        self.target_combo = QtWidgets.QComboBox()
+        layout.addWidget(self.target_combo)
+
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        {"class": self.class_radio, "room": self.room_radio,
+         "teacher": self.teacher_radio}.get(view_type, self.class_radio).setChecked(True)
+        idx = self.target_combo.findText(target)
+        if idx >= 0:
+            self.target_combo.setCurrentIndex(idx)
+
+    def _current_type(self) -> str:
+        if self.room_radio.isChecked():
+            return "room"
+        if self.teacher_radio.isChecked():
+            return "teacher"
+        return "class"
+
+    def _repopulate(self, checked: bool) -> None:
+        if not checked:
+            return  # 해제 시그널은 무시(전환 시 두 번 호출 방지)
+        self.target_combo.clear()
+        self.target_combo.addItems(self._targets.get(self._current_type(), []))
+
+    def values(self) -> tuple[str, str]:
+        return self._current_type(), self.target_combo.currentText()
