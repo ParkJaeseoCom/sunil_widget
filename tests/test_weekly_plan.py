@@ -1,5 +1,7 @@
 import datetime
+import json
 
+from teacher_widgets.core.config_store import ConfigStore
 from teacher_widgets.widgets.weekly_plan import (
     week_monday,
     build_schedules_query,
@@ -8,6 +10,7 @@ from teacher_widgets.widgets.weekly_plan import (
     group_entries,
     pick_days,
     PLAN_TIERS,
+    WeeklyPlanWidget,
 )
 
 
@@ -85,3 +88,58 @@ def test_pick_days_weekend_uses_base_monday():
 
 def test_plan_tiers_shape():
     assert PLAN_TIERS == [(0, "compact"), (300, "two_days"), (480, "week")]
+
+
+PLAN_CACHE = {
+    "fetched_at": "2026-07-02T10:00:00",
+    "week_monday": "2026-06-29",
+    "entries": [
+        {"date": "2026-07-02", "department": "학사일정", "content": "기말평가주간", "order": 0},
+        {"date": "2026-07-02", "department": "행정실", "content": "체육관 공사", "order": 1},
+        {"date": "2026-07-03", "department": "5학년", "content": "진단검사", "order": 0},
+    ],
+    "messages": {"principal": "안전 제일", "vicePrincipal": ""},
+}
+
+
+def make_plan_widget(qtbot, tmp_path, cache=PLAN_CACHE):
+    store = ConfigStore(tmp_path / "config.json")
+    store.load()
+    store.data["weekly_plan"]["_skip_initial_fetch"] = True
+    if cache is not None:
+        p = tmp_path / "cache" / "weekly_plan.json"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+    w = WeeklyPlanWidget(store)
+    qtbot.addWidget(w)
+    return store, w
+
+
+def test_plan_widget_renders_cache(qtbot, tmp_path):
+    store, w = make_plan_widget(qtbot, tmp_path)
+    assert w.widget_name == "weekly_plan"
+    text = w.days_text()  # 렌더된 전체 텍스트 요약 접근자
+    assert "기말평가주간" in text
+
+
+def test_plan_widget_no_cache_empty_state(qtbot, tmp_path):
+    store, w = make_plan_widget(qtbot, tmp_path, cache=None)
+    assert "데이터 없음" in w.status_label.text() or "새로고침" in w.status_label.text()
+
+
+def test_plan_widget_tier_from_height(qtbot, tmp_path):
+    store, w = make_plan_widget(qtbot, tmp_path)
+    w.resize(320, 200)
+    assert w.current_tier() == "compact"
+    w.resize(320, 350)
+    assert w.current_tier() == "two_days"
+    w.resize(320, 600)
+    assert w.current_tier() == "week"
+
+
+def test_plan_widget_hakssa_badge_precedes(qtbot, tmp_path):
+    store, w = make_plan_widget(qtbot, tmp_path)
+    w.resize(320, 600)
+    w.render_plan()
+    text = w.days_text()
+    assert text.index("기말평가주간") < text.index("체육관 공사")
