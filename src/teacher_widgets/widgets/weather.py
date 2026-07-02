@@ -247,8 +247,11 @@ class WeatherWidget(BaseWidget):
 
         if self._tier == "two_days":
             rain = wx.get("tomorrow_rain")
+            # 키는 항상 존재하고 값이 None일 수 있으므로 .get 기본값 대신 None 가드 사용
+            tmax2, tmin2 = wx.get("tomorrow_max"), wx.get("tomorrow_min")
             tomorrow = QtWidgets.QLabel(
-                f"내일 {wx.get('tomorrow_max', '-')}° / {wx.get('tomorrow_min', '-')}°"
+                f"내일 {tmax2 if tmax2 is not None else '-'}°"
+                f" / {tmin2 if tmin2 is not None else '-'}°"
                 + (f" · 강수 {rain}%" if rain is not None else "")
             )
             tomorrow.setAlignment(QtCore.Qt.AlignCenter)

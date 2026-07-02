@@ -253,6 +253,8 @@ class WeeklyPlanWidget(BaseWidget):
         grouped = group_entries(entries)
         monday_iso = (self._data or {}).get("week_monday")
         today = datetime.date.today()
+        # 캐시가 지난주 것이면 지난주 날짜가 그대로 표시됨(의도된 동작) —
+        # 날짜 라벨로 오래됨이 드러나고, 표시 직후 refresh가 자동 보정한다.
         monday = (datetime.date.fromisoformat(monday_iso)
                   if monday_iso else week_monday(today))
         weekday_names = ["월", "화", "수", "목", "금", "토", "일"]

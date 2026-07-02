@@ -104,3 +104,19 @@ def test_weather_widget_two_days_tier(qtbot, tmp_path):
     w.resize(220, 350)
     w.render_weather()
     assert "내일" in w.body_text()
+
+
+def test_weather_widget_two_days_missing_tomorrow_shows_dash(qtbot, tmp_path):
+    """내일 값이 None이어도 'None°'가 아니라 '-°'로 표시되어야 한다(최종 리뷰 회귀)."""
+    cache = {
+        "fetched_at": "2026-07-02T10:00:00",
+        "weather": {"temp": 26.0, "code": 1, "today_max": 26.2, "today_min": 19.6,
+                    "tomorrow_max": None, "tomorrow_min": None, "tomorrow_rain": None,
+                    "pm10": 22.8, "pm25": 19.4},
+    }
+    store, w = make_weather_widget(qtbot, tmp_path, cache=cache)
+    w.resize(220, 350)
+    w.render_weather()
+    text = w.body_text()
+    assert "None" not in text
+    assert "내일 -° / -°" in text
