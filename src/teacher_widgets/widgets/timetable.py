@@ -10,18 +10,16 @@ import datetime
 import shutil
 import subprocess
 import webbrowser
-from pathlib import Path
 
-from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6 import QtCore, QtWidgets
 
-from teacher_widgets.core.base_widget import BaseWidget
 from teacher_widgets.core.config_store import ConfigStore
 from teacher_widgets.core.data_remote import (
     anon_sign_in,
     firestore_get_document,
-    read_cache,
     write_cache,
 )
+from teacher_widgets.core.remote_widget import RemoteWidget
 from teacher_widgets.core.responsive import scale_factor, scaled_font_pt
 
 DAYS = ["월", "화", "수", "목", "금"]
@@ -196,21 +194,18 @@ class FetchWorker(QtCore.QThread):
             self.failed.emit(str(exc))
 
 
-class TimetableWidget(BaseWidget):
+class TimetableWidget(RemoteWidget):
+    CONFIG_KEY = "timetable"
+    TIERS = None
     BASE_SIZE = (340, 330)
 
     def __init__(self, store: ConfigStore):
-        super().__init__("timetable", store)
-        self.cache_path = Path(store.path).parent / "cache" / "timetable.json"
-        self._data: dict | None = None
-        self._worker: FetchWorker | None = None
+        super().__init__(store)
         self._web_proc = None
         self._cells: dict[tuple[str, int], QtWidgets.QLabel] = {}
 
         self.header_label = QtWidgets.QLabel("", alignment=QtCore.Qt.AlignCenter)
         self.header_label.setStyleSheet("font-weight:700; color:#2b2b2b;")
-        self.status_label = QtWidgets.QLabel("", alignment=QtCore.Qt.AlignCenter)
-        self.status_label.setStyleSheet("color:#999;")
         self.content_layout.addWidget(self.header_label)
         self.content_layout.addWidget(self.status_label)
 
@@ -233,61 +228,13 @@ class TimetableWidget(BaseWidget):
                 self.grid_layout.addWidget(cell, row + 1, col + 1)
         self.content_layout.addWidget(grid_container, stretch=1)
 
-        cached = read_cache(self.cache_path)
-        if cached is not None:
-            self._data = cached
-            self.render_grid()
-            self.status_label.setText(f"갱신: {cached.get('fetched_at', '')[:16]}")
-        else:
-            self.status_label.setText("데이터 없음 — 우클릭 → 새로고침")
+        self.render_grid()
 
-        self._refresh_timer = QtCore.QTimer(self)
-        self._refresh_timer.timeout.connect(self.refresh)
+    def _make_worker(self):
+        return FetchWorker(self.settings, self)
 
-        app = QtWidgets.QApplication.instance()
-        if app is not None:
-            app.aboutToQuit.connect(self._shutdown_worker)
-
-    def showEvent(self, event) -> None:
-        super().showEvent(event)
-        minutes = int(self.store.data["timetable"].get("refresh_minutes", 60))
-        self._refresh_timer.start(minutes * 60 * 1000)
-        if not self.store.data["timetable"].get("_skip_initial_fetch", False):
-            self.refresh()
-
-    def hideEvent(self, event) -> None:
-        super().hideEvent(event)
-        self._refresh_timer.stop()
-
-    def _shutdown_worker(self) -> None:
-        """앱 종료 시 진행 중인 fetch를 제한 시간 내에서 기다린다."""
-        worker = self._worker
-        if worker is not None and worker.isRunning():
-            worker.wait(2000)  # 무한 대기 금지 — 네트워크 타임아웃보다 짧게
-
-    def paintEvent(self, event):
-        painter = QtGui.QPainter(self)
-        painter.setRenderHint(QtGui.QPainter.Antialiasing)
-        painter.setBrush(QtGui.QColor(255, 255, 255, 235))
-        painter.setPen(QtCore.Qt.NoPen)
-        painter.drawRoundedRect(self.rect(), 16, 16)
-
-    # --- 데이터 ---
-    def refresh(self) -> None:
-        if self._worker is not None and self._worker.isRunning():
-            return
-        self._worker = FetchWorker(self.store.data["timetable"], self)
-        self._worker.finished_ok.connect(self._on_fetch_ok)
-        self._worker.failed.connect(self._on_fetch_failed)
-        self._worker.start()
-
-    def _on_fetch_ok(self, data: dict) -> None:
-        self.apply_data(data)
-        self.status_label.setText(f"갱신: {data.get('fetched_at', '')[:16]}")
-
-    def _on_fetch_failed(self, msg: str) -> None:
-        self.status_label.setText("갱신 실패 — 캐시 표시 중")
-        self.setToolTip(msg)
+    def _render(self) -> None:
+        self.render_grid()
 
     def apply_data(self, data: dict) -> None:
         self._data = data
@@ -320,7 +267,8 @@ class TimetableWidget(BaseWidget):
     def _custom_menu_actions(self, menu) -> dict:
         target_action = menu.addAction("대상 변경")
         refresh_action = menu.addAction("새로고침")
-        return {target_action: self.change_target, refresh_action: self.refresh}
+        return {target_action: self.change_target,
+                refresh_action: lambda: self.refresh(force=True)}
 
     def change_target(self) -> None:
         lessons = (self._data or {}).get("lessons", [])
@@ -388,6 +336,3 @@ class TimetableWidget(BaseWidget):
         self.status_label.setStyleSheet(
             f"color:#999; font-size:{scaled_font_pt(8, factor)}pt;"
         )
-
-    def on_resized(self, width: int, height: int) -> None:
-        self._apply_responsive()

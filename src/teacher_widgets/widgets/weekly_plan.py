@@ -6,20 +6,17 @@ import datetime
 import subprocess
 import urllib.error
 import webbrowser
-from pathlib import Path
 
-from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6 import QtCore, QtWidgets
 
-from teacher_widgets.core.base_widget import BaseWidget
 from teacher_widgets.core.config_store import ConfigStore
 from teacher_widgets.core.data_remote import (
     anon_sign_in,
     firestore_get_document,
     firestore_run_query,
-    read_cache,
-    write_cache,
 )
-from teacher_widgets.core.responsive import resolve_breakpoint, scale_factor, scaled_font_pt
+from teacher_widgets.core.remote_widget import RemoteWidget
+from teacher_widgets.core.responsive import scale_factor, scaled_font_pt
 from teacher_widgets.widgets.timetable import build_app_command
 
 PLAN_TIERS = [(0, "compact"), (300, "two_days"), (480, "week")]
@@ -144,21 +141,17 @@ class PlanFetchWorker(QtCore.QThread):
             self.failed.emit(str(exc))
 
 
-class WeeklyPlanWidget(BaseWidget):
+class WeeklyPlanWidget(RemoteWidget):
+    CONFIG_KEY = "weekly_plan"
+    TIERS = PLAN_TIERS
     BASE_SIZE = (320, 360)
 
     def __init__(self, store: ConfigStore):
-        super().__init__("weekly_plan", store)
-        self.cache_path = Path(store.path).parent / "cache" / "weekly_plan.json"
-        self._data: dict | None = None
-        self._worker: PlanFetchWorker | None = None
+        super().__init__(store)
         self._web_proc = None
-        self._tier = ""
 
         self.header_label = QtWidgets.QLabel("주간학습계획", alignment=QtCore.Qt.AlignCenter)
         self.header_label.setStyleSheet("font-weight:700; color:#2b2b2b;")
-        self.status_label = QtWidgets.QLabel("", alignment=QtCore.Qt.AlignCenter)
-        self.status_label.setStyleSheet("color:#999;")
         self.content_layout.addWidget(self.header_label)
         self.content_layout.addWidget(self.status_label)
 
@@ -168,71 +161,15 @@ class WeeklyPlanWidget(BaseWidget):
         self.days_layout.setSpacing(4)
         self.content_layout.addWidget(days_widget, stretch=1)
 
-        cached = read_cache(self.cache_path)
-        if cached is not None:
-            self._data = cached
-            self.status_label.setText(f"갱신: {cached.get('fetched_at', '')[:16]}")
-        else:
-            self.status_label.setText("데이터 없음 — 우클릭 → 새로고침")
         self.render_plan()
 
-        self._refresh_timer = QtCore.QTimer(self)
-        self._refresh_timer.timeout.connect(self.refresh)
+    def _make_worker(self):
+        return PlanFetchWorker(self.settings, self)
 
-        app = QtWidgets.QApplication.instance()
-        if app is not None:
-            app.aboutToQuit.connect(self._shutdown_worker)
-
-    def paintEvent(self, event):
-        painter = QtGui.QPainter(self)
-        painter.setRenderHint(QtGui.QPainter.Antialiasing)
-        painter.setBrush(QtGui.QColor(255, 255, 255, 235))
-        painter.setPen(QtCore.Qt.NoPen)
-        painter.drawRoundedRect(self.rect(), 16, 16)
-
-    # --- 수명주기 (시간표 패턴) ---
-    def showEvent(self, event) -> None:
-        super().showEvent(event)
-        minutes = int(self.store.data["weekly_plan"].get("refresh_minutes", 30))
-        self._refresh_timer.start(minutes * 60 * 1000)
-        if not self.store.data["weekly_plan"].get("_skip_initial_fetch", False):
-            self.refresh()
-
-    def hideEvent(self, event) -> None:
-        super().hideEvent(event)
-        self._refresh_timer.stop()
-
-    def _shutdown_worker(self) -> None:
-        worker = self._worker
-        if worker is not None and worker.isRunning():
-            worker.wait(2000)
-
-    # --- 데이터 ---
-    def refresh(self) -> None:
-        if self._worker is not None and self._worker.isRunning():
-            return
-        self._worker = PlanFetchWorker(self.store.data["weekly_plan"], self)
-        self._worker.finished_ok.connect(self._on_fetch_ok)
-        self._worker.failed.connect(self._on_fetch_failed)
-        self._worker.start()
-
-    def _on_fetch_ok(self, data: dict) -> None:
-        self.apply_data(data)
-        self.status_label.setText(f"갱신: {data.get('fetched_at', '')[:16]}")
-
-    def _on_fetch_failed(self, msg: str) -> None:
-        self.status_label.setText("갱신 실패 — 캐시 표시 중")
-        self.setToolTip(msg)
-
-    def apply_data(self, data: dict) -> None:
-        self._data = data
-        write_cache(self.cache_path, data)
+    def _render(self) -> None:
         self.render_plan()
 
     # --- 렌더 ---
-    def current_tier(self) -> str:
-        return resolve_breakpoint(self.height(), PLAN_TIERS)
-
     def days_text(self) -> str:
         """테스트/디버그용: 렌더된 일자 섹션 텍스트를 이어붙여 반환."""
         parts = []
@@ -297,7 +234,7 @@ class WeeklyPlanWidget(BaseWidget):
     # --- 메뉴/웹앱 ---
     def _custom_menu_actions(self, menu) -> dict:
         refresh_action = menu.addAction("새로고침")
-        return {refresh_action: self.refresh}
+        return {refresh_action: lambda: self.refresh(force=True)}
 
     def open_webapp(self) -> None:
         url = self.store.data["weekly_plan"].get("webapp_url", "")
@@ -324,10 +261,3 @@ class WeeklyPlanWidget(BaseWidget):
         self.status_label.setStyleSheet(
             f"color:#999; font-size:{scaled_font_pt(8, factor)}pt;"
         )
-
-    def on_resized(self, width: int, height: int) -> None:
-        new_tier = self.current_tier()
-        if new_tier != self._tier:
-            self.render_plan()
-        else:
-            self._apply_responsive()
