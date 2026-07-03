@@ -124,3 +124,12 @@ def test_tray_menu_lists_phase3_widgets(qtbot, tmp_path):
     texts = [a.text() for a in menu.actions() if a.text()]
     for nm in ("weekly_plan", "meal", "weather"):
         assert nm in texts
+
+
+def test_tray_menu_lists_attendance(qtbot, tmp_path):
+    store = ConfigStore(tmp_path / "config.json")
+    store.load()
+    reg = WidgetRegistry(store)
+    reg.register("attendance", lambda: BaseWidget("attendance", store))
+    menu = build_tray_menu(reg)
+    assert "attendance" in [a.text() for a in menu.actions() if a.text()]
