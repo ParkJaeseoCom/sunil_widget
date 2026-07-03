@@ -10,6 +10,8 @@ from teacher_widgets.widgets.attendance import (
     get_record,
     month_symbols,
     parse_command,
+    build_attendance_workbook,
+    months_with_records,
 )
 
 
@@ -87,3 +89,41 @@ def test_parse_failures():
     assert parse_command("7번", TODAY) is None             # 출결어 없음
     assert parse_command("7번 낮잠", TODAY) is None        # 미지의 단어
     assert parse_command("", TODAY) is None
+
+
+def _sample_data():
+    data = {}
+    set_record(data, "2026-07-03", 7, "결석", "질병")
+    set_record(data, "2026-07-15", 51, "결석", "출석인정")
+    set_record(data, "2026-06-29", 7, "지각", "질병")
+    return data
+
+
+def test_months_with_records():
+    assert months_with_records(_sample_data()) == ["2026-06", "2026-07"]
+    assert months_with_records({}) == []
+
+
+def test_workbook_single_month():
+    wb = build_attendance_workbook(_sample_data(), [7, 51], ["2026-07"])
+    assert wb.sheetnames == ["2026-07"]
+    ws = wb["2026-07"]
+    assert "2026년 7월" in ws.cell(row=1, column=1).value
+    assert "♡" in ws.cell(row=2, column=1).value  # 범례
+    assert ws.cell(row=4, column=1).value == "번호"
+    assert ws.cell(row=4, column=32).value == 31  # 7월 말일
+    # 5행=번호7, 6행=번호51; 날짜 d는 열 d+1
+    assert ws.cell(row=5, column=1).value == 7
+    assert ws.cell(row=5, column=4).value == "♡"    # 7/3
+    assert ws.cell(row=6, column=16).value == "△"   # 51번 7/15
+    assert ws.cell(row=5, column=5).value in (None, "")
+
+
+def test_workbook_multi_month_and_weekend_fill():
+    wb = build_attendance_workbook(_sample_data(), [7], ["2026-06", "2026-07"])
+    assert wb.sheetnames == ["2026-06", "2026-07"]
+    ws = wb["2026-07"]
+    # 2026-07-04는 토요일 → 헤더 열 5 회색 채움
+    assert ws.cell(row=4, column=5).fill.start_color.rgb.endswith("DDDDDD")
+    # 평일(7/3 금) 헤더는 채움 없음(기본 00000000)
+    assert not str(ws.cell(row=4, column=4).fill.start_color.rgb).endswith("DDDDDD")

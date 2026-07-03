@@ -5,8 +5,12 @@
 
 from __future__ import annotations
 
+import calendar
 import datetime
 import re
+
+from openpyxl import Workbook
+from openpyxl.styles import PatternFill
 
 STATUSES = ["결석", "지각", "조퇴", "결과"]
 REASONS = ["질병", "미인정", "기타", "출석인정"]
@@ -114,3 +118,43 @@ def parse_command(text: str, today: datetime.date,
         return {"number": number, "date": date_iso,
                 "status": status, "reason": reason}
     return None
+
+
+_WEEKEND_FILL = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
+
+
+def months_with_records(data: dict) -> list[str]:
+    return sorted({d[:7] for d in data.get("records", {})})
+
+
+def _legend_text() -> str:
+    parts = []
+    for status in STATUSES:
+        cells = " ".join(f"{reason}{SYMBOLS[(status, reason)]}" for reason in REASONS)
+        parts.append(f"{status}: {cells}")
+    return "  |  ".join(parts)
+
+
+def build_attendance_workbook(data: dict, numbers: list[int],
+                              months: list[str]) -> Workbook:
+    wb = Workbook()
+    wb.remove(wb.active)  # 기본 시트 제거
+    for ym in months:
+        year, month = int(ym[:4]), int(ym[5:7])
+        last_day = calendar.monthrange(year, month)[1]
+        ws = wb.create_sheet(title=ym)
+        ws.cell(row=1, column=1, value=f"{year}년 {month}월 출결")
+        ws.cell(row=2, column=1, value=_legend_text())
+        ws.cell(row=4, column=1, value="번호")
+        for day in range(1, last_day + 1):
+            cell = ws.cell(row=4, column=day + 1, value=day)
+            if datetime.date(year, month, day).weekday() >= 5:
+                cell.fill = _WEEKEND_FILL
+        symbols = month_symbols(data, year, month)
+        for row_idx, number in enumerate(numbers, start=5):
+            ws.cell(row=row_idx, column=1, value=number)
+            for day in range(1, last_day + 1):
+                sym = symbols.get((number, day))
+                if sym:
+                    ws.cell(row=row_idx, column=day + 1, value=sym)
+    return wb
