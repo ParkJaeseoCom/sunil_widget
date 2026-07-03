@@ -127,3 +127,73 @@ def test_workbook_multi_month_and_weekend_fill():
     assert ws.cell(row=4, column=5).fill.start_color.rgb.endswith("DDDDDD")
     # 평일(7/3 금) 헤더는 채움 없음(기본 00000000)
     assert not str(ws.cell(row=4, column=4).fill.start_color.rgb).endswith("DDDDDD")
+
+
+import json as _json
+
+from teacher_widgets.core.config_store import ConfigStore
+from teacher_widgets.widgets.attendance import AttendanceWidget
+
+
+def make_widget(qtbot, tmp_path, boys=3, girls=2):
+    store = ConfigStore(tmp_path / "config.json")
+    store.load()
+    store.set_roster(boys, girls)
+    w = AttendanceWidget(store)
+    qtbot.addWidget(w)
+    return store, w
+
+
+def test_widget_table_shape_from_roster(qtbot, tmp_path):
+    store, w = make_widget(qtbot, tmp_path)  # 번호 1,2,3,51,52
+    assert w.widget_name == "attendance"
+    assert w.table.rowCount() == 5
+    nums = [int(w.table.verticalHeaderItem(r).text()) for r in range(5)]
+    assert nums == [1, 2, 3, 51, 52]
+
+
+def test_apply_record_updates_cell_and_file(qtbot, tmp_path):
+    store, w = make_widget(qtbot, tmp_path)
+    date_iso = f"{w._year:04d}-{w._month:02d}-03"
+    w.apply_record(2, date_iso, "결석", "질병")
+    assert w.cell_symbol(2, 3) == "♡"
+    saved = _json.loads((tmp_path / "attendance.json").read_text(encoding="utf-8"))
+    assert saved["records"][date_iso]["2"]["status"] == "결석"
+    w.apply_clear(2, date_iso)
+    assert w.cell_symbol(2, 3) == ""
+
+
+def test_handle_command_with_explicit_date(qtbot, tmp_path):
+    store, w = make_widget(qtbot, tmp_path)
+    assert w.handle_command_text(f"3번 {w._month}월 5일 체험학습") is True
+    assert w.cell_symbol(3, 5) == "△"
+
+
+def test_handle_command_today_confirm(qtbot, tmp_path):
+    store, w = make_widget(qtbot, tmp_path)
+    w._confirm_today = lambda: True  # 팝업 우회
+    import datetime as _dt
+    today = _dt.date.today()
+    w._year, w._month = today.year, today.month
+    w.rebuild_table()
+    assert w.handle_command_text("51번 결석") is True
+    assert w.cell_symbol(51, today.day) == "♡"
+
+
+def test_handle_command_rejects_unknown_number_and_garbage(qtbot, tmp_path):
+    store, w = make_widget(qtbot, tmp_path)
+    assert w.handle_command_text("9번 결석") is False   # roster 밖(1-3,51-52)
+    assert w.error_label.text() != ""
+    assert w.handle_command_text("염소") is False
+
+
+def test_month_navigation(qtbot, tmp_path):
+    store, w = make_widget(qtbot, tmp_path)
+    w._year, w._month = 2026, 1
+    w.rebuild_table()
+    assert w.table.columnCount() == 31
+    w.go_month(1)   # 2월
+    assert (w._year, w._month) == (2026, 2)
+    assert w.table.columnCount() == 28
+    w.go_month(-2)  # 12월로 롤백
+    assert (w._year, w._month) == (2025, 12)
