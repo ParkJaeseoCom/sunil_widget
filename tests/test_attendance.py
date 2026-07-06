@@ -84,6 +84,11 @@ def test_parse_ref_year():
     assert parse_command("7번 1월 5일 결석", TODAY, ref_year=2027)["date"] == "2027-01-05"
 
 
+def test_parse_no_space_input():
+    assert parse_command("7번 6월29일결석", TODAY) == {
+        "number": 7, "date": "2026-06-29", "status": "결석", "reason": "질병"}
+
+
 def test_parse_failures():
     assert parse_command("결석", TODAY) is None            # 번호 없음
     assert parse_command("7번", TODAY) is None             # 출결어 없음
@@ -197,3 +202,21 @@ def test_month_navigation(qtbot, tmp_path):
     assert w.table.columnCount() == 28
     w.go_month(-2)  # 12월로 롤백
     assert (w._year, w._month) == (2025, 12)
+
+
+def test_shrunk_roster_does_not_crash(qtbot, tmp_path):
+    store, w = make_widget(qtbot, tmp_path)  # 1,2,3,51,52
+    date_iso = f"{w._year:04d}-{w._month:02d}-03"
+    w.apply_record(51, date_iso, "결석", "질병")
+    store.set_roster(3, 0)  # 여학생 제거 — 51 사라짐
+    assert w.cell_symbol(51, 3) == ""      # 크래시 없이 빈 값
+    w.apply_record(2, date_iso, "결석", "질병")  # _refresh_cell 경로도 안전
+    w.rebuild_table()
+    assert w.table.rowCount() == 3
+
+
+def test_show_event_rebuilds_to_current_roster(qtbot, tmp_path):
+    store, w = make_widget(qtbot, tmp_path)
+    store.set_roster(2, 0)
+    w.show()  # showEvent → rebuild_table
+    assert w.table.rowCount() == 2

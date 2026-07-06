@@ -17,6 +17,7 @@ def test_save_then_load_roundtrip_and_bak(tmp_path):
     save_json_with_backup(p, {"v": 2})       # 두 번째 저장 → 이전본이 bak
     assert load_json_with_backup(p) == {"v": 2}
     assert json.loads((tmp_path / "d" / "a.json.bak").read_text(encoding="utf-8")) == {"v": 1}
+    assert not list((tmp_path / "d").glob("*.tmp"))  # 임시 파일 잔존 없음(원자적 교체)
 
 
 def test_corrupt_recovers_from_bak(tmp_path):

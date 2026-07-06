@@ -223,6 +223,10 @@ class AttendanceWidget(BaseWidget):
         painter.setPen(QtCore.Qt.NoPen)
         painter.drawRoundedRect(self.rect(), 16, 16)
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.rebuild_table()  # 숨김 중 학급 구성이 바뀌었을 수 있어 재표시 시 동기화
+
     # --- 번호/월 ---
     def _numbers(self) -> list[int]:
         boys, girls = self.store.get_roster()
@@ -261,7 +265,10 @@ class AttendanceWidget(BaseWidget):
                 self.table.setItem(row, day - 1, item)
 
     def cell_symbol(self, number: int, day: int) -> str:
-        row = self._numbers().index(number)
+        numbers = self._numbers()
+        if number not in numbers:
+            return ""
+        row = numbers.index(number)
         item = self.table.item(row, day - 1)
         return item.text() if item else ""
 
@@ -272,10 +279,13 @@ class AttendanceWidget(BaseWidget):
     def _refresh_cell(self, number: int, date_iso: str) -> None:
         if not date_iso.startswith(f"{self._year:04d}-{self._month:02d}-"):
             return  # 다른 달 — 현재 그리드 무관
+        numbers = self._numbers()
+        if number not in numbers:
+            return  # roster 축소로 그리드에 없는 번호 — 데이터는 이미 저장됨
         day = int(date_iso[8:10])
         rec = get_record(self._data, date_iso, number)
         text = symbol_for(rec["status"], rec["reason"]) if rec else ""
-        row = self._numbers().index(number)
+        row = numbers.index(number)
         item = self.table.item(row, day - 1)
         if item:
             item.setText(text)
@@ -300,6 +310,7 @@ class AttendanceWidget(BaseWidget):
 
     def handle_command_text(self, text: str) -> bool:
         self.error_label.setText("")
+        self.error_label.setStyleSheet("color:#c0392b;")
         cmd = parse_command(text, datetime.date.today(), ref_year=self._year)
         if cmd is None:
             self.error_label.setText("이해하지 못했어요 — 예: 7번 6월 29일 결석")
@@ -324,7 +335,10 @@ class AttendanceWidget(BaseWidget):
 
     # --- 셀 퀵메뉴 ---
     def _on_cell_clicked(self, row: int, col: int) -> None:
-        number = self._numbers()[row]
+        numbers = self._numbers()
+        if row >= len(numbers):
+            return  # roster 축소 후 재구성 전의 낡은 그리드 행
+        number = numbers[row]
         date_iso = f"{self._year:04d}-{self._month:02d}-{col + 1:02d}"
         menu = QtWidgets.QMenu(self)
         quick = [("결석 ♡", "결석", "질병"), ("체험학습 △", "결석", "출석인정")]

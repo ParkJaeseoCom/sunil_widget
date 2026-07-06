@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -38,11 +39,13 @@ def load_json_with_backup(path: Path) -> dict:
 
 
 def save_json_with_backup(path: Path, data: dict) -> None:
-    """저장 전 기존 파일을 .bak으로 복사(1세대 백업)."""
+    """저장 전 기존 파일을 .bak으로 복사(1세대 백업), 임시 파일에 쓴 뒤 원자적 교체."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         shutil.copy2(path, path.with_suffix(path.suffix + ".bak"))
-    path.write_text(
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(
         json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    os.replace(tmp, path)  # 같은 볼륨에서 원자적 교체 — 부분 쓰기 파일이 남지 않음
